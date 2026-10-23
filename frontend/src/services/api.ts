@@ -179,6 +179,64 @@ export const api = {
     return `${API_BASE}/resumes/${resumeId}/export-pdf`;
   },
 
+  async fetchGithubInfo(url: string): Promise<any> {
+    try {
+      const res = await fetchWithTimeout(
+        `${API_BASE}/resumes/github/fetch?url=${encodeURIComponent(url)}`,
+        { headers: getAuthHeaders() },
+        10000
+      );
+      return await handleResponse(res);
+    } catch (_backendErr) {
+      // Fallback directly to public GitHub API if backend is unreachable
+      const cleanPath = url.replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, "").replace(/\/$/, "");
+      const parts = cleanPath.split("/").filter(Boolean);
+      if (parts.length >= 2) {
+        const [owner, repo] = parts;
+        const resp = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+        if (!resp.ok) throw new Error("Could not fetch repository from GitHub");
+        const repoData = await resp.json();
+        return {
+          type: "repository",
+          owner,
+          repo,
+          html_url: repoData.html_url,
+          project: {
+            id: `proj-gh-${Math.random().toString(36).substring(2, 9)}`,
+            name: repoData.name,
+            role: "Creator & Lead Developer",
+            link: repoData.html_url,
+            start_date: "",
+            end_date: "",
+            technologies: [repoData.language, ...(repoData.topics || [])].filter(Boolean),
+            bullets: [
+              repoData.description || `Open-source project on GitHub with ${repoData.stargazers_count} stars.`,
+              `Architected and implemented project features using ${repoData.language || "modern tech stack"}.`
+            ]
+          }
+        };
+      } else if (parts.length === 1) {
+        const [owner] = parts;
+        const resp = await fetch(`https://api.github.com/users/${owner}`);
+        if (!resp.ok) throw new Error("Could not fetch user profile from GitHub");
+        const userData = await resp.json();
+        return {
+          type: "profile",
+          username: owner,
+          html_url: userData.html_url,
+          contact_info: {
+            name: userData.name || owner,
+            github: userData.html_url,
+            location: userData.location || "",
+            portfolio: userData.blog || ""
+          },
+          summary_snippet: userData.bio || ""
+        };
+      }
+      throw new Error("Invalid GitHub URL format");
+    }
+  },
+
   async exportPdfPreview(resumeData: Partial<ResumeData>): Promise<Blob> {
     const res = await fetchWithTimeout(`${API_BASE}/resumes/export-pdf-preview`, {
       method: "POST",

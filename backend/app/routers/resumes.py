@@ -404,3 +404,119 @@ def export_pdf_preview(resume_in: ResumeCreate):
             "Content-Disposition": 'inline; filename="FitCheck_Resume_Preview.pdf"'
         }
     )
+
+@router.get("/github/fetch")
+def fetch_github_info(url: str):
+    """
+    Parses a GitHub repository or profile URL and returns structured data
+    ready to populate resume contact info or project sections.
+    """
+    import urllib.request
+    import json
+    import re
+
+    if not url or not url.strip():
+        raise HTTPException(status_code=400, detail="A GitHub URL or username must be provided.")
+
+    clean = url.strip()
+    clean_path = re.sub(r"^(?:https?://)?(?:www\.)?github\.com/", "", clean).strip("/")
+    parts = [p for p in clean_path.split("/") if p]
+
+    if not parts:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL format.")
+
+    owner = parts[0]
+    repo = parts[1] if len(parts) > 1 else None
+
+    def make_gh_request(endpoint: str):
+        req = urllib.request.Request(
+            f"https://api.github.com/{endpoint}",
+            headers={"User-Agent": "FitCheck-ATS-Resume-Builder"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    if repo:
+        repo_data = make_gh_request(f"repos/{owner}/{repo}")
+        repo_name = repo_data.get("name") if repo_data else repo
+        description = (repo_data.get("description") or "").strip() if repo_data else ""
+        language = (repo_data.get("language") or "") if repo_data else ""
+        topics = repo_data.get("topics", []) if repo_data else []
+        stars = repo_data.get("stargazers_count", 0) if repo_data else 0
+        html_url = repo_data.get("html_url") if repo_data else f"https://github.com/{owner}/{repo}"
+
+        techs = [t for t in ([language] + topics) if t]
+        bullets = []
+        if description:
+            bullets.append(description)
+        if stars > 0:
+            bullets.append(f"Engineered and maintained open-source codebase with {stars} star{'s' if stars != 1 else ''} on GitHub.")
+        else:
+            bullets.append(f"Designed and implemented project architecture using {language or 'modern developer tooling'}.")
+        bullets.append("Configured repository version control, continuous integration, and clean code documentation.")
+
+        project_entry = {
+            "id": f"proj-gh-{str(uuid.uuid4())[:8]}",
+            "name": repo_name,
+            "role": "Creator & Lead Developer",
+            "link": html_url,
+            "start_date": "",
+            "end_date": "",
+            "technologies": techs,
+            "bullets": bullets
+        }
+
+        return {
+            "type": "repository",
+            "owner": owner,
+            "repo": repo,
+            "html_url": html_url,
+            "project": project_entry
+        }
+    else:
+        user_data = make_gh_request(f"users/{owner}")
+        repos_data = make_gh_request(f"users/{owner}/repos?sort=updated&per_page=6") or []
+
+        html_url = user_data.get("html_url") if user_data else f"https://github.com/{owner}"
+        name = (user_data.get("name") or owner) if user_data else owner
+        bio = (user_data.get("bio") or "") if user_data else ""
+        location = (user_data.get("location") or "") if user_data else ""
+        blog = (user_data.get("blog") or "") if user_data else ""
+
+        recommended_projects = []
+        for r in repos_data:
+            if not r.get("fork"):
+                r_name = r.get("name", "")
+                r_desc = r.get("description") or ""
+                r_lang = r.get("language") or ""
+                r_stars = r.get("stargazers_count", 0)
+                r_url = r.get("html_url", "")
+                r_techs = [t for t in ([r_lang] + r.get("topics", [])) if t]
+                r_bullets = [r_desc] if r_desc else ["Open-source repository created and hosted on GitHub."]
+                if r_stars > 0:
+                    r_bullets.append(f"Earned {r_stars} star{'s' if r_stars != 1 else ''} from open-source contributors.")
+                recommended_projects.append({
+                    "id": f"proj-gh-{str(uuid.uuid4())[:8]}",
+                    "name": r_name,
+                    "role": "Developer / Maintainer",
+                    "link": r_url,
+                    "technologies": r_techs,
+                    "bullets": r_bullets
+                })
+
+        return {
+            "type": "profile",
+            "username": owner,
+            "html_url": html_url,
+            "contact_info": {
+                "name": name,
+                "github": html_url,
+                "location": location,
+                "portfolio": blog if blog.startswith("http") else (f"https://{blog}" if blog else "")
+            },
+            "summary_snippet": bio,
+            "projects": recommended_projects
+        }

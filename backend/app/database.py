@@ -49,5 +49,9 @@ def get_db():
 
 def init_db():
     eng = get_engine()
+    try:
+        from . import models  # noqa: F401
+    except (ImportError, ValueError):
+        import app.models  # noqa: F401
     Base.metadata.create_all(bind=eng)
     logger.info("Database tables verified/created successfully.")

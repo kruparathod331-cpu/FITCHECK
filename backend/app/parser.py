@@ -16,8 +16,20 @@ HEADER_PATTERNS = {
 
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 PHONE_REGEX = re.compile(r"(\+?\d{1,3}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}")
-LINKEDIN_REGEX = re.compile(r"(https?://)?(www\.)?linkedin\.com/in/[a-zA-Z0-9_-]+", re.IGNORECASE)
-GITHUB_REGEX = re.compile(r"(https?://)?(www\.)?github\.com/[a-zA-Z0-9_-]+", re.IGNORECASE)
+LINKEDIN_REGEX = re.compile(r"(?:https?://)?(?:www\.)?linkedin\.com/in/[a-zA-Z0-9_-]+", re.IGNORECASE)
+GITHUB_REGEX = re.compile(r"(?:https?://)?(?:www\.)?github\.com/[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)?/?", re.IGNORECASE)
+GITHUB_PROFILE_REGEX = re.compile(r"(?:https?://)?(?:www\.)?github\.com/([a-zA-Z0-9_-]+)/?", re.IGNORECASE)
+GITHUB_REPO_REGEX = re.compile(r"(?:https?://)?(?:www\.)?github\.com/([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+)/?", re.IGNORECASE)
+
+def normalize_url(url: str, default_domain: str = "") -> str:
+    if not url:
+        return ""
+    cleaned = url.strip().rstrip("/")
+    if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
+        if default_domain and not cleaned.startswith(default_domain):
+            cleaned = f"{default_domain}/{cleaned.lstrip('/')}"
+        cleaned = f"https://{cleaned}"
+    return cleaned
 
 KNOWN_TECH_SKILLS = {
     "python", "javascript", "typescript", "c++", "c#", "java", "ruby", "php", "swift", "kotlin", "go", "golang", "rust", "sql", "r", "html", "css",
@@ -128,12 +140,12 @@ def parse_resume_text(raw_text: str) -> Dict[str, Any]:
     # Search for LinkedIn
     li_match = LINKEDIN_REGEX.search(raw_text)
     if li_match:
-        contact_info["linkedin"] = li_match.group(0)
+        contact_info["linkedin"] = normalize_url(li_match.group(0))
 
     # Search for GitHub
     gh_match = GITHUB_REGEX.search(raw_text)
     if gh_match:
-        contact_info["github"] = gh_match.group(0)
+        contact_info["github"] = normalize_url(gh_match.group(0))
 
     # Search for location
     loc_match = LOCATION_REGEX.search(raw_text)
@@ -273,18 +285,33 @@ def parse_resume_text(raw_text: str) -> Dict[str, Any]:
         proj_lines = sections["projects"]
         current_proj = None
         for line in proj_lines:
+            # Check for GitHub repository URL or general URL in line
+            gh_match = GITHUB_REGEX.search(line)
+            extracted_link = ""
+            if gh_match:
+                extracted_link = normalize_url(gh_match.group(0))
+            elif "http://" in line or "https://" in line:
+                url_m = re.search(r"https?://[^\s|]+", line)
+                if url_m:
+                    extracted_link = url_m.group(0)
+
             if line.startswith(("-", "•", "*", "–")) or (current_proj and len(line) > 30):
                 clean_bullet = re.sub(r"^[-•*–\s]+", "", line).strip()
                 if current_proj:
                     current_proj["bullets"].append(clean_bullet)
+                    if extracted_link and not current_proj.get("link"):
+                        current_proj["link"] = extracted_link
             else:
                 if current_proj:
                     project_entries.append(current_proj)
+                proj_name = line.strip()
+                if extracted_link:
+                    proj_name = proj_name.replace(extracted_link, "").strip(" -|:\t")
                 current_proj = {
                     "id": str(uuid.uuid4()),
-                    "name": line,
+                    "name": proj_name or "Project",
                     "role": "Developer / Contributor",
-                    "link": "",
+                    "link": extracted_link,
                     "start_date": "",
                     "end_date": "",
                     "technologies": [],

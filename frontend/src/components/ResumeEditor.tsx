@@ -8,7 +8,7 @@ import {
   User, BookOpen, Briefcase, FolderGit2, Wrench, Award, AlignLeft,
   Plus, Trash2, ArrowUp, ArrowDown, Download, Save, Check, RefreshCw,
   Eye, EyeOff, LayoutTemplate, History, Sparkles, FileText, CheckCircle2,
-  AlertCircle, Trophy
+  AlertCircle, Trophy, ExternalLink
 } from "lucide-react";
 
 interface ResumeEditorProps {
@@ -31,6 +31,51 @@ export const ResumeEditor: React.FC<ResumeEditorProps> = ({
   const [versions, setVersions] = useState<any[]>([]);
   const [loadingVersions, setLoadingVersions] = useState<boolean>(false);
   const [exportingPdf, setExportingPdf] = useState<boolean>(false);
+  const [showGithubModal, setShowGithubModal] = useState<boolean>(false);
+  const [githubUrlInput, setGithubUrlInput] = useState<string>("");
+  const [fetchingGithub, setFetchingGithub] = useState<boolean>(false);
+  const [githubFetchMsg, setGithubFetchMsg] = useState<string | null>(null);
+
+  const handleImportGithubUrl = async () => {
+    if (!githubUrlInput.trim()) return;
+    setFetchingGithub(true);
+    setGithubFetchMsg(null);
+    try {
+      const data = await api.fetchGithubInfo(githubUrlInput.trim());
+      if (data.type === "repository" && data.project) {
+        updateField("projects", [...(resume.projects || []), data.project]);
+        setGithubFetchMsg(`Imported project "${data.project.name}" successfully!`);
+        setTimeout(() => {
+          setShowGithubModal(false);
+          setGithubFetchMsg(null);
+          setGithubUrlInput("");
+        }, 1000);
+      } else if (data.type === "profile") {
+        if (data.contact_info) {
+          updateField("contact_info", {
+            ...resume.contact_info,
+            github: data.contact_info.github || resume.contact_info.github,
+            name: resume.contact_info.name || data.contact_info.name,
+            location: resume.contact_info.location || data.contact_info.location,
+            portfolio: resume.contact_info.portfolio || data.contact_info.portfolio,
+          });
+        }
+        if (data.projects && data.projects.length > 0) {
+          updateField("projects", [...(resume.projects || []), ...data.projects]);
+        }
+        setGithubFetchMsg(`Imported GitHub profile & repositories for "${data.username}" successfully!`);
+        setTimeout(() => {
+          setShowGithubModal(false);
+          setGithubFetchMsg(null);
+          setGithubUrlInput("");
+        }, 1000);
+      }
+    } catch (err: any) {
+      setGithubFetchMsg(err?.message || "Failed to fetch from GitHub URL.");
+    } finally {
+      setFetchingGithub(false);
+    }
+  };
 
   // New skill chip inputs
   const [newSkillText, setNewSkillText] = useState<{ [key: string]: string }>({
@@ -490,12 +535,26 @@ export const ResumeEditor: React.FC<ResumeEditorProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">GitHub / Code Portfolio</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">GitHub / Code Portfolio</label>
+                      {resume.contact_info.github && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGithubUrlInput(resume.contact_info.github);
+                            setShowGithubModal(true);
+                          }}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                        >
+                          Sync from GitHub
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={resume.contact_info.github}
                       onChange={(e) => updateContact("github", e.target.value)}
-                      placeholder="e.g. github.com/alexchen-code"
+                      placeholder="e.g. https://github.com/alexchen-code"
                       className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
@@ -821,13 +880,23 @@ export const ResumeEditor: React.FC<ResumeEditorProps> = ({
                     <h3 className="text-base font-bold text-slate-900">Projects</h3>
                     <p className="text-xs text-slate-500">Crucial for early career candidates: academic, capstone, or personal open-source projects.</p>
                   </div>
-                  <button
-                    onClick={addProject}
-                    className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Project</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowGithubModal(true)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
+                    >
+                      <FolderGit2 className="w-3.5 h-3.5" />
+                      <span>Import from GitHub URL</span>
+                    </button>
+                    <button
+                      onClick={addProject}
+                      className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Project</span>
+                    </button>
+                  </div>
                 </div>
 
                 {resume.projects?.length === 0 ? (
@@ -890,7 +959,20 @@ export const ResumeEditor: React.FC<ResumeEditorProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Repository / Live URL</label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-semibold text-slate-700">Repository / Live URL</label>
+                            {item.link && (
+                              <a
+                                href={item.link.startsWith("http") ? item.link : `https://${item.link}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center space-x-1 text-[11px] text-indigo-600 hover:text-indigo-800"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span>Open URL</span>
+                              </a>
+                            )}
+                          </div>
                           <input
                             type="text"
                             value={item.link}
@@ -1256,6 +1338,109 @@ export const ResumeEditor: React.FC<ResumeEditorProps> = ({
                 className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GitHub URL Import Modal */}
+      {showGithubModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center space-x-2">
+                <FolderGit2 className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-slate-900">Import from GitHub URL</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowGithubModal(false);
+                  setGithubFetchMsg(null);
+                }}
+                className="text-slate-400 hover:text-slate-700 text-lg"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Paste any GitHub repository link (e.g. <code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded">github.com/owner/repo</code>) or profile link (<code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded">github.com/username</code>) to automatically extract project titles, technologies, summaries, and clickable repo links.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">GitHub URL or Username</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={githubUrlInput}
+                    onChange={(e) => setGithubUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleImportGithubUrl();
+                      }
+                    }}
+                    placeholder="e.g. https://github.com/torvalds/subsurface"
+                    className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleImportGithubUrl}
+                    disabled={fetchingGithub || !githubUrlInput.trim()}
+                    className="px-4 py-2 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition shadow-sm"
+                  >
+                    {fetchingGithub ? "Fetching..." : "Import"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick sample chips */}
+              <div>
+                <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Try a sample repository:</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "https://github.com/facebook/react",
+                    "https://github.com/torvalds/subsurface",
+                    "https://github.com/fastapi/fastapi",
+                    "https://github.com/alexchen-code",
+                  ].map((sample) => (
+                    <button
+                      key={sample}
+                      type="button"
+                      onClick={() => setGithubUrlInput(sample)}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      {sample.replace("https://github.com/", "")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {githubFetchMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium ${
+                    githubFetchMsg.includes("successfully")
+                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      : "bg-rose-50 text-rose-800 border border-rose-200"
+                  }`}
+                >
+                  {githubFetchMsg}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGithubModal(false);
+                  setGithubFetchMsg(null);
+                }}
+                className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
               </button>
             </div>
           </div>

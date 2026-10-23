@@ -188,6 +188,19 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Zero server file persistence — processed safely in-memory.</span>
             </div>
+
+            <div className="mt-4 flex items-center justify-center space-x-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTestWithSamplePdf();
+                }}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition shadow-sm"
+              >
+                Or test with sample ATS Resume PDF
+              </button>
+            </div>
           </div>
 
           {isUploading && (

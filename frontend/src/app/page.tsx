@@ -10,7 +10,7 @@ import { MatchReportView } from "../components/MatchReportView";
 import { AuthModal } from "../components/AuthModal";
 import { api } from "../services/api";
 import { ResumeData, UserProfile, MatchReportData } from "../types/resume";
-import { ShieldCheck, ArrowUpRight, FileText, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 const DEFAULT_RESUME: ResumeData = {
   title: "My ATS Resume",
@@ -105,7 +105,7 @@ export default function Home() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [resumes, setResumes] = useState<ResumeData[]>([]);
   const [activeResume, setActiveResume] = useState<ResumeData>(DEFAULT_RESUME);
-  const [reports, setReports] = useState<any[]>([]);
+  const [reports, setReports] = useState<MatchReportData[]>([]);
   const [viewingReport, setViewingReport] = useState<MatchReportData | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
@@ -113,23 +113,6 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Initial Load: check session and fetch data
-  useEffect(() => {
-    initApp();
-  }, []);
-
-  const initApp = async () => {
-    try {
-      const me = await api.getMe();
-      if (me) {
-        setUser(me);
-      }
-    } catch (e) {
-      console.warn("No active session:", e);
-    }
-    refreshData();
-  };
 
   const refreshData = async () => {
     try {
@@ -146,6 +129,23 @@ export default function Home() {
       console.error("Error refreshing data:", err);
     }
   };
+
+  const initApp = async () => {
+    try {
+      const me = await api.getMe();
+      if (me) {
+        setUser(me);
+      }
+    } catch (e) {
+      console.warn("No active session:", e);
+    }
+    refreshData();
+  };
+
+  // Initial Load: check session and fetch data
+  useEffect(() => {
+    initApp();
+  }, []);
 
   // Debounced autosave
   const handleUpdateResume = (updated: ResumeData) => {

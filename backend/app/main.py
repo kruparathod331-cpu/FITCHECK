@@ -1,11 +1,27 @@
 import logging
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .config import settings
-from .database import init_db
-from .routers import auth, resumes, matcher, reports
+# Ensure current and parent directories are in sys.path for direct execution
+app_dir = Path(__file__).resolve().parent
+backend_dir = app_dir.parent
+workspace_dir = backend_dir.parent
+for path in [str(workspace_dir), str(backend_dir), str(app_dir)]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+try:
+    from .config import settings
+    from .database import init_db
+    from .routers import auth, resumes, matcher, reports
+except (ImportError, ValueError):
+    from app.config import settings
+    from app.database import init_db
+    from app.routers import auth, resumes, matcher, reports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("fitcheck.main")
@@ -28,14 +44,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
-# Setup CORS for Next.js frontend and local development
+# Setup CORS for Next.js frontend, local development, GitHub Pages, and Vercel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:[0-9]+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:[0-9]+)?|https://.*\.github\.io|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,3 +84,10 @@ def root():
         "health_url": "/api/health"
     }
 
+def main():
+    import uvicorn
+    logger.info("Starting FitCheck API Server on http://127.0.0.1:8000 ...")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+if __name__ == "__main__":
+    main()

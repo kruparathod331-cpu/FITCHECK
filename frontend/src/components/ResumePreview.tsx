@@ -16,10 +16,8 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
   const isCreative = tKey === "creative";
   const isExecutive = tKey === "executive";
   const isTechnical = tKey === "technical" || tKey === "technical-ats";
-  const isModern = !isMinimal && !isCreative && !isExecutive && !isTechnical;
-
   // Theme styling according to template
-  let containerClass = "bg-white text-slate-900 p-8 sm:p-10 shadow-xl rounded-xl border border-slate-200 min-h-[900px] max-w-[800px] mx-auto leading-normal selection:bg-indigo-100 transition-all";
+  const containerClass = "bg-white text-slate-900 p-8 sm:p-10 shadow-xl rounded-xl border border-slate-200 min-h-[900px] max-w-[800px] mx-auto leading-normal selection:bg-indigo-100 transition-all";
   let fontClass = "font-sans";
   let nameColorClass = "text-indigo-950";
   let headingColorClass = "text-indigo-900 border-indigo-200";

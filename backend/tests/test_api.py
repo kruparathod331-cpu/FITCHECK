@@ -157,3 +157,21 @@ def test_upload_pdf_endpoints():
     )
     assert res_empty.status_code == 400
 
+def test_github_fetch_endpoints():
+    # Test repository URL fetch
+    res_repo = client.get("/api/resumes/github/fetch?url=https://github.com/torvalds/subsurface")
+    assert res_repo.status_code == 200
+    repo_data = res_repo.json()
+    assert repo_data["type"] == "repository"
+    assert repo_data["owner"] == "torvalds"
+    assert "project" in repo_data
+
+    # Test profile URL fetch
+    res_user = client.get("/api/resumes/github/fetch?url=https://github.com/octocat")
+    assert res_user.status_code == 200
+    user_data = res_user.json()
+    assert user_data["type"] == "profile"
+    assert user_data["username"] == "octocat"
+    assert "contact_info" in user_data
+
+
